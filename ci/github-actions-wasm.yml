@@ -1,0 +1,66 @@
+# WASM build of the Sonic Generations recomp port.
+#
+# Runs the full ~11.7M-line generated-code + SDK compile on CI runners
+# (~2-4 h on ubuntu-latest). Uploads sonicgenerations.js/.wasm as artifacts.
+#
+# Trigger: workflow_dispatch, or push when build inputs change.
+
+name: wasm-build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "emscripten/**"
+      - "ci/**"
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Checkout port project
+        uses: actions/checkout@v4
+        with:
+          repository: Player124413/Sonic-Generations-recomp-android-and-pc-edition
+          path: game
+
+      - name: Checkout wasm harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+
+      - name: Cache emsdk
+        uses: actions/cache@v4
+        with:
+          path: emsdk
+          key: emsdk-latest
+
+      - name: Cache rexglue-sdk + submodules
+        uses: actions/cache@v4
+        with:
+          path: |
+            rexglue-sdk
+            !rexglue-sdk/build
+          key: rexglue-sdk-v0.10.0-emscripten-patched
+
+      - name: Build
+        run: |
+          bash harness/emscripten/build.sh --jobs $(nproc) \
+            || bash harness/emscripten/build.sh --jobs $(nproc)
+
+      - name: Assemble web bundle
+        run: |
+          mkdir -p web-bundle
+          cp harness/web/index.html web-bundle/
+          cp harness/web/serve.py web-bundle/
+          cp harness/emscripten/build/web/sonicgenerations.js web-bundle/ 2>/dev/null || true
+          cp harness/emscripten/build/web/sonicgenerations.wasm web-bundle/ 2>/dev/null || true
+          ls -la web-bundle/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonic-generations-wasm
+          path: web-bundle/

@@ -1,37 +1,24 @@
-# Compiled source #
-###################
-*.com
-*.class
-*.dll
-*.exe
+# Build outputs (produced by emscripten/build.sh)
+emscripten/build/
+web/sonicgenerations.js
+web/sonicgenerations.wasm
+web/sonicgenerations.data
+*.wasm.tmp
+
+# Toolchains / SDKs cloned by build.sh or setup (kept out of the repo)
+emsdk/
+rexglue-sdk/
+Sonic-Generations-recomp-android-and-pc-edition/
+
+# Object files / logs
 *.o
-*.so
-
-# Packages #
-############
-# it's better to unpack these files and commit the raw source
-# git has its own built in compression methods
-*.7z
-*.dmg
-*.gz
-*.iso
-*.jar
-*.rar
-*.tar
-*.zip
-
-# Logs and databases #
-######################
+*.obj
 *.log
-*.sql
-*.sqlite
+webgpu-build-check/
 
-# OS generated files #
-######################
+# OS / editor noise
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+.vscode/
+.idea/
+__pycache__/

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonic Generations — Recomp WebAssembly Port</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #121722; --panel2: #182031; --line: #26304a;
+    --txt: #dbe4f5; --dim: #8fa0c0; --acc: #3fa7ff; --ok: #37c871;
+    --warn: #ffb84d; --err: #ff5d5d; --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--txt);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
+  header h1 span { color: var(--acc); }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--line); color: var(--dim); background: var(--panel2);
+  }
+  #hud { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+  .stat { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--dim); }
+  .stat b { color: var(--txt); font-weight: 600; }
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 12px 16px; gap: 12px; }
+  #stage-wrap { position: relative; flex: 1; min-height: 220px; }
+  #stage {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    background: #000; border: 1px solid var(--line); border-radius: var(--radius);
+    object-fit: contain; display: block;
+  }
+  #overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 20px; color: var(--dim); border-radius: var(--radius);
+    background: radial-gradient(ellipse at 50% 35%, #10161f 0%, #070a0f 100%);
+  }
+  #overlay .box { max-width: 640px; }
+  #overlay h2 { color: var(--txt); font-size: clamp(18px, 4vw, 26px); margin-bottom: 10px; }
+  #overlay p { margin-bottom: 8px; }
+  #drop { border: 2px dashed var(--line); border-radius: 12px; padding: 22px; margin: 14px 0;
+          transition: border-color .2s, background .2s; cursor: pointer; }
+  #drop.hover { border-color: var(--acc); background: rgba(63,167,255,.06); }
+  .btn {
+    display: inline-block; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    background: var(--acc); color: #04101f; font-weight: 600; border: 0; font-size: 14px;
+  }
+  .btn.ghost { background: var(--panel2); color: var(--txt); border: 1px solid var(--line); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  #bootbar { height: 6px; background: var(--panel2); border-radius: 4px; overflow: hidden; margin-top: 12px; }
+  #bootbar i { display: block; height: 100%; width: 0%; background: var(--acc); transition: width .25s; }
+  #logwrap { height: 170px; display: flex; flex-direction: column; }
+  #logwrap header2 { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  #log {
+    flex: 1; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 8px 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .l-ok { color: var(--ok); } .l-warn { color: var(--warn); } .l-err { color: var(--err); }
+  .l-info { color: var(--dim); }
+  #touchpad { position: absolute; inset: 0; display: none; pointer-events: none; }
+  body.touch #touchpad { display: block; }
+  .tzone { position: absolute; pointer-events: auto; }
+  #stick { left: 4%; bottom: 6%; width: clamp(96px, 24vw, 150px); aspect-ratio: 1; }
+  #stick .nub { position: absolute; left: 50%; top: 50%; width: 42%; height: 42%; border-radius: 50%;
+                background: rgba(63,167,255,.35); border: 1px solid var(--acc); transform: translate(-50%,-50%); }
+  #stick { border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.04); }
+  .tbtn { width: clamp(44px, 11vw, 64px); aspect-ratio: 1; border-radius: 50%; font-weight: 700;
+          display: flex; align-items: center; justify-content: center; color: #fff; user-select: none;
+          border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.08); font-size: 14px; }
+  #btnA { right: 4%; bottom: 20%; background: rgba(55,200,113,.25); border-color: var(--ok); }
+  #btnB { right: calc(4% + clamp(50px, 12vw, 72px)); bottom: 6%; background: rgba(255,93,93,.25); border-color: var(--err); }
+  #btnX { right: calc(4% + clamp(50px, 12vw, 72px)); bottom: calc(6% + clamp(50px, 12vw, 72px)); background: rgba(63,167,255,.25); border-color: var(--acc); }
+  #btnY { right: 4%; bottom: calc(20% + clamp(50px, 12vw, 72px)); background: rgba(255,184,77,.25); border-color: var(--warn); }
+  .tips { color: var(--dim); font-size: 12px; }
+  kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-width: 2px;
+        border-radius: 4px; padding: 1px 5px; font: 11px ui-monospace, monospace; }
+  @media (max-width: 640px) {
+    main { padding: 8px; gap: 8px; }
+    #logwrap { height: 120px; }
+    header { padding: 8px 10px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sonic Generations <span>recomp</span> — WebAssembly</h1>
+  <span class="badge" id="modeBadge">shell</span>
+  <div id="hud">
+    <span class="stat">FPS <b id="fps">—</b></span>
+    <span class="stat">Frame <b id="ms">—</b></span>
+    <span class="stat">Heap <b id="heap">—</b></span>
+    <span class="stat">Files <b id="nfiles">0</b></span>
+  </div>
+</header>
+
+<main>
+  <div id="stage-wrap">
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <div id="overlay">
+      <div class="box">
+        <h2>Runtime not loaded yet</h2>
+        <p id="overlayMsg">
+          This browser shell is complete; the WebAssembly runtime
+          (<code>sonicgenerations.js</code> + <code>sonicgenerations.wasm</code>) is built by CI
+          from the 11.7M-line recompiled codebase — see <code>ci/github-actions-wasm.yml</code>.
+        </p>
+        <div id="drop">
+          <p><b>Drop game files here</b> or</p>
+          <p><label class="btn ghost">Choose files<input id="fileInput" type="file" multiple hidden></label></p>
+          <p class="tips">Sonic Generations (USA/EU) — the <code>default.xex</code> image is compiled in;
+             the shell asks for the game's <b>data files</b> only. Nothing leaves your browser.</p>
+        </div>
+        <p>
+          <button class="btn" id="bootBtn" disabled>Boot runtime</button>
+          <button class="btn ghost" id="wipeBtn">Clear stored files</button>
+        </p>
+        <div id="bootbar"><i></i></div>
+      </div>
+    </div>
+    <div id="touchpad">
+      <div class="tzone" id="stick"><div class="nub"></div></div>
+      <div class="tzone tbtn" id="btnA">A</div>
+      <div class="tzone tbtn" id="btnB">B</div>
+      <div class="tzone tbtn" id="btnX">X</div>
+      <div class="tzone tbtn" id="btnY">Y</div>
+    </div>
+  </div>
+
+  <div id="logwrap">
+    <header2>
+      <b>Console</b>
+      <span class="tips">keyboard: <kbd>WASD</kbd> stick · <kbd>arrows</kbd> d-pad · <kbd>Space</kbd> A · <kbd>K</kbd> B · <kbd>J</kbd> X · <kbd>I</kbd> Y · <kbd>Q</kbd>/<kbd>E</kbd> LB/RB · <kbd>U</kbd>/<kbd>O</kbd> LT/RT · <kbd>Enter</kbd> Start · <kbd>Shift</kbd> Back</span>
+    </header2>
+    <div id="log"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+/* Sonic Generations recomp — browser shell.
+ * Loads the runtime module when present, manages the user's game files in
+ * IndexedDB, mounts them into the wasm filesystem before boot, feeds input,
+ * tracks FPS/heap, and syncs IDBFS saves. Everything runs locally.
+ */
+const $ = id => document.getElementById(id);
+const logEl = $("log"), fpsEl = $("fps"), msEl = $("ms"), heapEl = $("heap"), nfilesEl = $("nfiles");
+const canvas = $("stage"), overlay = $("overlay"), bootBar = $("bootbar").firstElementChild;
+const bootBtn = $("bootBtn");
+
+function log(msg, cls = "l-info") {
+  const t = new Date().toLocaleTimeString();
+  const line = document.createElement("div");
+  line.className = cls; line.textContent = `[${t}] ${msg}`;
+  logEl.appendChild(line); logEl.scrollTop = logEl.scrollHeight;
+}
+
+/* ---------- IndexedDB game-file store ---------- */
+const DB_NAME = "sg-recomp", STORE = "files";
+function openDB() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(DB_NAME, 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore(STORE);
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function putFile(name, buf) {
+  const db = await openDB();
+  await new Promise((res, rej) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).put(buf, name);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function allFiles() {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, "readonly");
+    const out = {};
+    const rq = tx.objectStore(STORE).openCursor();
+    rq.onsuccess = () => {
+      const c = rq.result;
+      if (c) { out[c.key] = c.value; c.continue(); } else res(out);
+    };
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function wipeFiles() {
+  const db = await openDB();
+  await new Promise((res, rej) => {
+    const tx = db.transaction(STORE, "readwrite");
+    tx.objectStore(STORE).clear();
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+
+/* ---------- file intake ---------- */
+let gameFiles = {};
+async function ingest(fileList) {
+  for (const f of fileList) {
+    const buf = await f.arrayBuffer();
+    await putFile(f.name, buf);
+    gameFiles[f.name] = buf;
+    log(`stored ${f.name} (${(buf.byteLength / 1048576).toFixed(1)} MiB)`, "l-ok");
+  }
+  const n = Object.keys(gameFiles).length;
+  nfilesEl.textContent = n;
+  bootBtn.disabled = n === 0;
+  if (n) log(`${n} file(s) ready — press "Boot runtime".`, "l-ok");
+}
+$("drop").addEventListener("click", e => { if (e.target.tagName !== "INPUT") $("fileInput").click(); });
+$("fileInput").addEventListener("change", e => ingest(e.target.files));
+addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("hover"); });
+addEventListener("dragleave", () => $("drop").classList.remove("hover"));
+addEventListener("drop", e => {
+  e.preventDefault(); $("drop").classList.remove("hover");
+  if (e.dataTransfer.files.length) ingest(e.dataTransfer.files);
+});
+$("wipeBtn").addEventListener("click", async () => {
+  await wipeFiles(); gameFiles = {};
+  nfilesEl.textContent = 0; bootBtn.disabled = true;
+  log("stored files cleared", "l-warn");
+});
+
+/* ---------- runtime detection + boot ---------- */
+const RUNTIME_JS = "sonicgenerations.js";
+async function detectRuntime() {
+  try {
+    const r = await fetch(RUNTIME_JS, { method: "HEAD" });
+    if (r.ok) { $("modeBadge").textContent = "runtime"; return true; }
+  } catch (_) {}
+  log(`runtime module ${RUNTIME_JS} not found next to index.html — build it with emscripten/build.sh (CI: ci/github-actions-wasm.yml)`, "l-warn");
+  return false;
+}
+let Module = null, running = false;
+async function boot() {
+  if (running || !Object.keys(gameFiles).length) return;
+  running = true; overlay.style.display = "none";
+  log("booting runtime…", "l-ok"); bootBar.style.width = "5%";
+  try {
+    // Mount game files into the wasm filesystem (MEMFS /game), then hand off.
+    const factory = window.SonicGenerationsRecomp;
+    if (!factory) throw new Error("runtime factory missing (module not loaded)");
+    bootBar.style.width = "25%";
+    Module = await factory({
+      canvas,
+      locateFile: p => p.endsWith(".wasm") ? p : p,
+      print: t => log(t, "l-info"),
+      printErr: t => log(t, "l-err"),
+      onRuntimeInitialized: () => { bootBar.style.width = "60%"; },
+    });
+    bootBar.style.width = "75%";
+    Module.FS.mkdirTree("/game");
+    const names = Object.keys(gameFiles);
+    for (let i = 0; i < names.length; i++) {
+      Module.FS.writeFile("/game/" + names[i], new Uint8Array(gameFiles[names[i]]));
+      bootBar.style.width = (75 + 20 * (i + 1) / names.length) + "%";
+    }
+    // IDBFS save sync (saves land in /save inside the module; mirrored to IndexedDB)
+    Module.FS.mount(Module.IDBFS, { name: "sg-saves" }, "/save");
+    await new Promise((res, rej) => Module.FS.syncfs(true, err => err ? rej(err) : res()));
+    bootBar.style.width = "95%";
+    log("mounting complete — entering guest main()", "l-ok");
+    Module.callMain(["-g", "/game"]);
+    bootBar.style.width = "100%";
+  } catch (err) {
+    log("boot failed: " + (err && err.message || err), "l-err");
+    overlay.style.display = "flex"; running = false;
+  }
+}
+bootBtn.addEventListener("click", boot);
+setInterval(() => { if (Module && Module.FS) { try { Module.FS.syncfs(false, () => {}); } catch (_) {} } }, 5000);
+
+/* ---------- input ---------- */
+const KEYMAP = {
+  KeyW: "stick_up", KeyS: "stick_down", KeyA: "stick_left", KeyD: "stick_right",
+  ArrowUp: "dpad_up", ArrowDown: "dpad_down", ArrowLeft: "dpad_left", ArrowRight: "dpad_right",
+  Space: "button_a", KeyK: "button_b", KeyJ: "button_x", KeyI: "button_y",
+  KeyQ: "bumper_left", KeyE: "bumper_right", KeyU: "trigger_left", KeyO: "trigger_right",
+  Enter: "start", ShiftLeft: "back",
+};
+const inputState = {};
+for (const k of new Set(Object.values(KEYMAP))) inputState[k] = 0;
+function sendInput(name, v) {
+  inputState[name] = v;
+  if (Module && Module._rex_input_set) Module.ccall("rex_input_set", null, ["string", "number"], [name, v]);
+}
+addEventListener("keydown", e => { const m = KEYMAP[e.code]; if (m) { sendInput(m, 1); if (m.startsWith("button") || m.startsWith("dpad") || m === "start") e.preventDefault(); } });
+addEventListener("keyup", e => { const m = KEYMAP[e.code]; if (m) sendInput(m, 0); });
+
+/* touch pad */
+if (matchMedia("(pointer: coarse)").matches) document.body.classList.add("touch");
+const stick = $("stick"), nub = stick.querySelector(".nub");
+let stickId = null;
+function stickMove(t) {
+  const r = stick.getBoundingClientRect();
+  const dx = Math.max(-1, Math.min(1, (t.clientX - (r.left + r.width / 2)) / (r.width / 2)));
+  const dy = Math.max(-1, Math.min(1, (t.clientY - (r.top + r.height / 2)) / (r.height / 2)));
+  nub.style.transform = `translate(calc(-50% + ${dx * 30}%), calc(-50% + ${dy * 30}%))`;
+  sendInput("stick_left", dx < -0.35 ? 1 : 0);
+  sendInput("stick_right", dx > 0.35 ? 1 : 0);
+  sendInput("stick_up", dy < -0.35 ? 1 : 0);
+  sendInput("stick_down", dy > 0.35 ? 1 : 0);
+}
+stick.addEventListener("touchstart", e => { stickId = e.changedTouches[0].identifier; stickMove(e.changedTouches[0]); e.preventDefault(); });
+stick.addEventListener("touchmove", e => { for (const t of e.changedTouches) if (t.identifier === stickId) stickMove(t); e.preventDefault(); });
+stick.addEventListener("touchend", () => { stickId = null; nub.style.transform = "translate(-50%,-50%)";
+  ["stick_left", "stick_right", "stick_up", "stick_down"].forEach(k => sendInput(k, 0)); });
+for (const id of ["btnA", "btnB", "btnX", "btnY"]) {
+  const el = $(id), name = "button_" + id.slice(3).toLowerCase();
+  el.addEventListener("touchstart", e => { sendInput(name, 1); e.preventDefault(); });
+  el.addEventListener("touchend", e => { sendInput(name, 0); e.preventDefault(); });
+}
+
+/* ---------- HUD ---------- */
+let frames = 0, last = performance.now();
+function loop(t) {
+  frames++;
+  if (t - last >= 500) {
+    const fps = frames * 1000 / (t - last);
+    fpsEl.textContent = fps.toFixed(0);
+    msEl.textContent = (1000 / fps).toFixed(1) + "ms";
+    if (Module && Module.HEAPU8) heapEl.textContent = (Module.HEAPU8.length / 1048576).toFixed(0) + "M";
+    frames = 0; last = t;
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* gamepad API (wired controllers) */
+addEventListener("gamepadconnected", e => log(`gamepad connected: ${e.gamepad.id}`, "l-ok"));
+function pollPads() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (const p of pads) {
+    if (!p) continue;
+    const m = { 0: "button_a", 1: "button_b", 2: "button_x", 3: "button_y",
+                4: "bumper_left", 5: "bumper_right", 6: "trigger_left", 7: "trigger_right",
+                9: "start", 8: "back",
+                12: "dpad_up", 13: "dpad_down", 14: "dpad_left", 15: "dpad_right" };
+    for (const i in m) sendInput(m[i], p.buttons[i] && p.buttons[i].pressed ? 1 : 0);
+    sendInput("stick_axis_x", p.axes[0] || 0);
+    sendInput("stick_axis_y", p.axes[1] || 0);
+    break; // v1: first pad
+  }
+  requestAnimationFrame(pollPads);
+}
+requestAnimationFrame(pollPads);
+
+/* ---------- start ---------- */
+(async () => {
+  gameFiles = await allFiles().catch(() => ({}));
+  const n = Object.keys(gameFiles).length;
+  nfilesEl.textContent = n; bootBtn.disabled = n === 0;
+  if (n) log(`restored ${n} previously stored file(s) from IndexedDB`, "l-ok");
+  log("checking WebGPU availability…");
+  if (navigator.gpu) log("WebGPU available — GPU plugin can attach", "l-ok");
+  else log("WebGPU NOT available — runtime will boot without rendering until Phase-3 backend lands", "l-warn");
+  if (typeof SharedArrayBuffer === "undefined") log("SharedArrayBuffer unavailable — pthread build needs COOP/COEP headers (use web/serve.py)", "l-err");
+  else log("SharedArrayBuffer available — pthread build OK", "l-ok");
+  await detectRuntime();
+})();
+</script>
+</body>
+</html>
