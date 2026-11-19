@@ -19,6 +19,13 @@ jobs:
   build-wasm:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    env:
+      # build.sh defaults assume the game repo sits next to the harness under
+      # its full project name; on CI it is checked out at ./game, so point the
+      # script at it explicitly.
+      GAME_DIR: ${{ github.workspace }}/game
+      REXGLUE_SDK_DIR: ${{ github.workspace }}/rexglue-sdk
+      EMSDK_DIR: ${{ github.workspace }}/emsdk
     steps:
       - name: Checkout port project
         uses: actions/checkout@v4
@@ -43,7 +50,9 @@ jobs:
           path: |
             rexglue-sdk
             !rexglue-sdk/build
-          key: rexglue-sdk-v0.10.0-emscripten-patched
+          # Bump the suffix whenever rexglue-sdk-v0.10.0-emscripten.patch changes,
+          # otherwise a stale patched SDK clone is reused.
+          key: rexglue-sdk-v0.10.0-emscripten-patched-r2
 
       - name: Build
         run: |

@@ -33,7 +33,20 @@ if [ ! -x "$EMSDK_DIR/emsdk" ]; then
   git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
 fi
 export EMSDK_QUIET=1
+# A fresh emsdk clone has no toolchain installed: emsdk_env.sh only puts emcc
+# on PATH once install+activate have run, so bootstrap first when needed.
+if [ ! -x "$EMSDK_DIR/upstream/emscripten/emcc" ]; then
+  echo "[build] emsdk: installing + activating latest toolchain (first run only)"
+  "$EMSDK_DIR/emsdk" install latest
+  "$EMSDK_DIR/emsdk" activate latest
+fi
+# shellcheck disable=SC1091
 source "$EMSDK_DIR/emsdk_env.sh"
+if ! command -v emcc >/dev/null 2>&1; then
+  echo "ERROR: emcc is not on PATH after sourcing $EMSDK_DIR/emsdk_env.sh" >&2
+  echo "       emsdk state: $(ls "$EMSDK_DIR" 2>/dev/null | tr '\n' ' ')" >&2
+  exit 1
+fi
 emcc --version | head -1
 
 echo "=== [2/5] rexglue-sdk $SDK_VER + emscripten patch ==="
@@ -57,6 +70,15 @@ fi
 echo "=== [3/5] Stage generated code + wasm overload rewrite ==="
 GEN_SRC="$GAME/port/generated/default"
 GEN_DST="$BUILD_DIR/generated/default"
+if [ ! -f "$GAME/port/src/main.cpp" ] || [ ! -d "$GEN_SRC" ]; then
+  echo "ERROR: generated game code not found at $GAME" >&2
+  echo "       Expected the Sonic-Generations-recomp checkout with:" >&2
+  echo "         $GEN_SRC/*.cpp" >&2
+  echo "         $GAME/port/src/main.cpp" >&2
+  echo "       Point GAME_DIR at your checkout, e.g.:" >&2
+  echo "         GAME_DIR=\$GITHUB_WORKSPACE/game bash harness/emscripten/build.sh" >&2
+  exit 1
+fi
 mkdir -p "$GEN_DST" "$BUILD_DIR/app"
 cp "$GEN_SRC"/*.cpp "$GEN_SRC"/*.h "$GEN_DST/"
 cp "$GAME/port/src/main.cpp" "$GAME/port/src/sonicgenerations_app.h" "$BUILD_DIR/app/"

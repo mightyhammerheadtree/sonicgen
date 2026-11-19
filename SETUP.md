@@ -139,9 +139,24 @@ cd sonicgen
 
 2. CI: `.github/workflows/wasm-build.yml` (same file as
    `ci/github-actions-wasm.yml`) triggers on pushes touching `emscripten/**`
-   or `ci/**`, plus manual `workflow_dispatch`. It checks out the game repo +
-   this harness, caches emsdk and the patched SDK, runs `build.sh` (with one
-   automatic retry), and uploads `sonicgenerations.js/.wasm` as an artifact.
+   or `ci/**`, plus manual `workflow_dispatch`. It checks out the game repo
+   into `game/`, this harness into `harness/`, sets
+   `GAME_DIR` / `REXGLUE_SDK_DIR` / `EMSDK_DIR` for `build.sh`, caches `emsdk/`
+   and `rexglue-sdk/`, runs `build.sh` (with one automatic retry), and uploads
+   `sonicgenerations.js/.wasm` as an artifact.
+
+   Gotchas when adapting it to your own repo layout:
+
+   - The workflow file must live at the **repo root**
+     `.github/workflows/wasm-build.yml`. GitHub ignores it anywhere else
+     (e.g. inside `harness/.github/`).
+   - `build.sh` locates the game checkout through `GAME_DIR` (default: a
+     sibling directory named `Sonic-Generations-recomp-android-and-pc-edition`).
+     If you check the game out under a different path, set `GAME_DIR` to it —
+     the workflow does this for you.
+   - Bump the `rexglue-sdk-...-patched-rN` cache-key suffix in the workflow
+     whenever `rexglue-sdk-v0.10.0-emscripten.patch` changes, otherwise CI
+     reuses a stale patched SDK clone.
 
 3. Runner notes: `ubuntu-latest` works; the build is long, so the job has a
    300-minute timeout and caches `emsdk/` + `rexglue-sdk/` (minus `build/`).
