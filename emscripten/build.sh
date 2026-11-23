@@ -9,6 +9,7 @@
 #   5. Build -> sonicgenerations.{js,wasm} into web/
 #
 # Usage:  bash emscripten/build.sh [--jobs N]
+#         WASM_CONFIGURE_ONLY=1  -> stop after the CMake configure step
 # Output: build/web/  ->  copy sonicgenerations.js + sonicgenerations.wasm
 #         next to web/index.html and serve with web/serve.py.
 set -euo pipefail
@@ -17,7 +18,13 @@ PRJ="$(cd "$(dirname "$0")/.." && pwd)"
 GAME="${GAME_DIR:-$PRJ/../Sonic-Generations-recomp-android-and-pc-edition}"
 SDK_ROOT="${REXGLUE_SDK_DIR:-$PRJ/../rexglue-sdk}"
 SDK_VER="v0.10.0"
-EMSDK_DIR="${EMSDK_DIR:-$PRJ/../emsdk}"
+# NOTE: deliberately NOT named "EMSDK_DIR". Sourcing emsdk_env.sh runs
+# `emsdk construct_env`, which emits `unset <VAR>` for every environment
+# variable starting with EMSDK_ that emsdk does not itself manage (see
+# construct_env_with_vars in emsdk.py). Under `set -u`, any later $EMSDK_DIR
+# reference would die with "unbound variable". The workflow's EMSDK_DIR env
+# override is still honored -- it is read here, before the source.
+WASM_EMSDK_DIR="${WASM_EMSDK_DIR:-${EMSDK_DIR:-$PRJ/../emsdk}}"
 BUILD_DIR="$PRJ/build/web"
 JOBS="$(nproc)"
 while [[ $# -gt 0 ]]; do
@@ -29,22 +36,22 @@ done
 STAMP="$SDK_ROOT/.emscripten-patched"
 
 echo "=== [1/5] Emscripten toolchain ==="
-if [ ! -x "$EMSDK_DIR/emsdk" ]; then
-  git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
+if [ ! -x "$WASM_EMSDK_DIR/emsdk" ]; then
+  git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$WASM_EMSDK_DIR"
 fi
 export EMSDK_QUIET=1
 # A fresh emsdk clone has no toolchain installed: emsdk_env.sh only puts emcc
 # on PATH once install+activate have run, so bootstrap first when needed.
-if [ ! -x "$EMSDK_DIR/upstream/emscripten/emcc" ]; then
+if [ ! -x "$WASM_EMSDK_DIR/upstream/emscripten/emcc" ]; then
   echo "[build] emsdk: installing + activating latest toolchain (first run only)"
-  "$EMSDK_DIR/emsdk" install latest
-  "$EMSDK_DIR/emsdk" activate latest
+  "$WASM_EMSDK_DIR/emsdk" install latest
+  "$WASM_EMSDK_DIR/emsdk" activate latest
 fi
 # shellcheck disable=SC1091
-source "$EMSDK_DIR/emsdk_env.sh"
+source "$WASM_EMSDK_DIR/emsdk_env.sh"
 if ! command -v emcc >/dev/null 2>&1; then
-  echo "ERROR: emcc is not on PATH after sourcing $EMSDK_DIR/emsdk_env.sh" >&2
-  echo "       emsdk state: $(ls "$EMSDK_DIR" 2>/dev/null | tr '\n' ' ')" >&2
+  echo "ERROR: emcc is not on PATH after sourcing $WASM_EMSDK_DIR/emsdk_env.sh" >&2
+  echo "       emsdk state: $(ls "$WASM_EMSDK_DIR" 2>/dev/null | tr '\n' ' ')" >&2
   exit 1
 fi
 emcc --version | head -1
@@ -55,9 +62,12 @@ if [ ! -d "$SDK_ROOT/src" ]; then
 fi
 # Submodules required to compile core + generated code (GPU/video giants are
 # pulled only when their backends are enabled; WebGPU needs none of them).
+# libmspack/FFmpeg/sdl3 are in the SDK's unconditional REQUIRED_SUBMODULES
+# check (thirdparty/CMakeLists.txt) even when the wasm build never links them.
 for m in fmt spdlog tomlplusplus simde xxHash utfcpp stb imgui o1heap \
          disruptorplus inja cli11 aes_128 tiny-aes-c crypto pe disasm \
-         vulkan-headers spirv-headers glslang renderdoc catch2; do
+         vulkan-headers spirv-headers glslang renderdoc catch2 \
+         libmspack FFmpeg sdl3; do
   git -C "$SDK_ROOT" submodule update --init --depth 1 "thirdparty/$m"
 done
 if [ ! -f "$STAMP" ]; then
@@ -93,15 +103,19 @@ echo "[build] setFromMaskInt rewrite applied to $(grep -rl setFromMaskInt "$GEN_
 
 echo "=== [4/5] CMake configure ==="
 cmake -B "$BUILD_DIR" -S "$PRJ/emscripten" \
-  -DCMAKE_TOOLCHAIN_FILE="$EMSDK_DIR/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" \
+  -DCMAKE_TOOLCHAIN_FILE="$WASM_EMSDK_DIR/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake" \
   -DCMAKE_BUILD_TYPE=Release \
   -DREXGLUE_SDK_DIR="$SDK_ROOT" \
   -DREXGLUE_APP_SRC_DIR="$BUILD_DIR" \
   -DREXGLUE_USE_WEBGPU=ON \
   -DREXGLUE_ENABLE_TRACY=OFF \
   -DREXGLUE_ENABLE_PERF_COUNTERS=OFF \
-  -DREXGLUE_BUILD_TESTS=OFF \
-  -DREX_WASM_DAWN_PORT=ON
+  -DREXGLUE_BUILD_TESTS=OFF
+
+if [ "${WASM_CONFIGURE_ONLY:-0}" = "1" ]; then
+  echo "[build] WASM_CONFIGURE_ONLY=1 -> configure succeeded, skipping build step"
+  exit 0
+fi
 
 echo "=== [5/5] Build ==="
 cmake --build "$BUILD_DIR" -j "$JOBS"

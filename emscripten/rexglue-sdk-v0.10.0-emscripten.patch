@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 9b3cdf5..ef18982 100644
+index 9b3cdf5..98bceba 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -42,8 +42,16 @@ else()
@@ -21,6 +21,17 @@ index 9b3cdf5..ef18982 100644
  endif()
  
  if (REXGLUE_ENABLE_FIDELITYFX AND
+@@ -94,8 +102,8 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+     endif()
+ endif()
+ 
+-# Enforce x64 architecture
+-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
++# Enforce x64 architecture (native builds; wasm32 Emscripten builds have 4-byte pointers)
++if(NOT CMAKE_SYSTEM_NAME STREQUAL "Emscripten" AND NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+     message(FATAL_ERROR "ReXGlue only supports 64‑bit architectures (x86_64 or ARM64)")
+ endif()
+ 
 diff --git a/include/rex/chrono/chrono.h b/include/rex/chrono/chrono.h
 index d876846..cbe49e0 100644
 --- a/include/rex/chrono/chrono.h
@@ -5583,3 +5594,19 @@ index 0000000..d1ccfda
 +                          int shader_stage, WgslTranslationResult& result);
 +
 +}  // namespace rex::graphics::webgpu
+diff --git a/src/ui/CMakeLists.txt b/src/ui/CMakeLists.txt
+index 5bd3dc5..552e78e 100644
+--- a/src/ui/CMakeLists.txt
++++ b/src/ui/CMakeLists.txt
+@@ -146,7 +146,10 @@ if(REXGLUE_USE_VULKAN)
+ endif()
+ 
+ # Platform-specific dependencies
+-if(UNIX AND NOT APPLE)
++if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
++    # Web/wasm build: no X11/Wayland here (UNIX is true under the Emscripten
++    # toolchain); SDL3 provides the platform layer.
++elseif(UNIX AND NOT APPLE)
+     find_package(PkgConfig REQUIRED)
+     pkg_check_modules(X11_XCB REQUIRED x11-xcb)
+     # Required, not optional: vulkan/api.h pulls in <wayland-client.h> on every

@@ -54,7 +54,8 @@ target_link_libraries(sonicgenerations PRIVATE
     rex::system
     rex::kernel
     rex::codegen
-    rexglue
+    # NOTE: do NOT link "rexglue" here -- it is the SDK's CLI recompiler tool
+    # (an EXECUTABLE); the component rex::* libraries above are the runtime.
 )
 
 # ---- Emscripten link flags -------------------------------------------------

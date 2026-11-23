@@ -161,6 +161,9 @@ cd sonicgen
 3. Runner notes: `ubuntu-latest` works; the build is long, so the job has a
    300-minute timeout and caches `emsdk/` + `rexglue-sdk/` (minus `build/`).
    If you fork the game repo, update the `repository:` line in the workflow.
+   To verify the harness up to the CMake configure step without the full
+   multi-hour compile, run
+   `WASM_CONFIGURE_ONLY=1 bash harness/emscripten/build.sh`.
 
 ## 6. Verifying your toolchain / backend changes
 
