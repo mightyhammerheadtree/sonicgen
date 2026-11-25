@@ -32,9 +32,10 @@ target_include_directories(rexgen PRIVATE
     "${GEN}"
     "${REXGLUE_SDK_DIR}/include"
 )
-# The generated code is hot-path bound: -O3 + LTO. SIMD128 is on project-wide
-# (simde maps its SSE calls onto wasm intrinsics).
-target_compile_options(rexgen PRIVATE -O3 -flto -fno-rtti -w)
+# The generated code is hot-path bound: -O3 + LTO. SIMD128 must be enabled at
+# compile time (not just link time) or simde's SSE calls compile to a scalar
+# fallback instead of mapping onto wasm v128_t intrinsics.
+target_compile_options(rexgen PRIVATE -O3 -flto -fno-rtti -w -msimd128)
 
 # ---- App shell -------------------------------------------------------------
 add_executable(sonicgenerations
@@ -86,7 +87,7 @@ target_link_options(sonicgenerations PRIVATE
     -sEXPORTED_FUNCTIONS=_main
     "SHELL:--use-port=emdawnwebgpu"
 )
-target_compile_options(sonicgenerations PRIVATE -O3 -flto -fno-rtti -w --use-port=emdawnwebgpu)
+target_compile_options(sonicgenerations PRIVATE -O3 -flto -fno-rtti -w -msimd128 --use-port=emdawnwebgpu)
 
 # The GPU plugin consumes WebGPU headers (Dawn port) as well.
 target_compile_options(rexgpu-xenos PRIVATE --use-port=emdawnwebgpu)

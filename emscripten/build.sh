@@ -70,6 +70,15 @@ for m in fmt spdlog tomlplusplus simde xxHash utfcpp stb imgui o1heap \
          libmspack FFmpeg sdl3; do
   git -C "$SDK_ROOT" submodule update --init --depth 1 "thirdparty/$m"
 done
+# FFmpeg (WMA Pro decoder) is built without a configure step: the submodule
+# vendors per-platform config headers but none for Emscripten. Copy the wasm
+# config + dispatch stub over the submodule files on every run (idempotent,
+# survives SDK cache restores that ship the upstream stubs).
+mkdir -p "$SDK_ROOT/thirdparty/FFmpeg"
+cp "$PRJ/emscripten/ffmpeg/config_emscripten.h" \
+   "$SDK_ROOT/thirdparty/FFmpeg/config_emscripten.h"
+cp "$PRJ/emscripten/ffmpeg/config.h" "$SDK_ROOT/thirdparty/FFmpeg/config.h"
+echo "[build] FFmpeg wasm config installed"
 if [ ! -f "$STAMP" ]; then
   echo "[build] applying emscripten patch"
   git -C "$SDK_ROOT" apply --whitespace=nowarn \

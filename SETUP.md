@@ -25,6 +25,9 @@ from a fresh clone.
 ├── emscripten/
 │   ├── build.sh                  One-command wasm build (see §3)
 │   ├── CMakeLists.txt            Link config: pthreads + JSPI + Dawn/WebGPU port
+│   ├── ffmpeg/
+│   │   ├── config.h              FFmpeg config dispatch (selects the wasm config)
+│   │   └── config_emscripten.h   FFmpeg wasm config; build.sh copies it over the SDK submodule
 │   └── rexglue-sdk-v0.10.0-emscripten.patch   The SDK patch (31 files, incl. WebGPU backend)
 ├── ci/
 │   └── github-actions-wasm.yml   CI build workflow (ubuntu-latest, ~2–4 h)

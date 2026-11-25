@@ -52,7 +52,7 @@ jobs:
             !rexglue-sdk/build
           # Bump the suffix whenever rexglue-sdk-v0.10.0-emscripten.patch changes,
           # otherwise a stale patched SDK clone is reused.
-          key: rexglue-sdk-v0.10.0-emscripten-patched-r3
+          key: rexglue-sdk-v0.10.0-emscripten-patched-r4
 
       - name: Build
         run: |
